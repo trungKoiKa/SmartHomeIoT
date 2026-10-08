@@ -24,3 +24,7 @@ backend/src/main/webapp/resources/images/avatar/*
 # Broker dev: file mat khau da bam
 infra/mosquitto/passwd
 
+
+# Paho tu tao thu muc luu session khi dung file persistence
+backend/homesmart-*/
+
