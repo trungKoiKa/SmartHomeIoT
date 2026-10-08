@@ -10,6 +10,7 @@ import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
+import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -54,7 +55,7 @@ public class MqttConfig {
         }
 
         try {
-            MqttClient client = new MqttClient(brokerUrl, clientId);
+            MqttClient client = new MqttClient(brokerUrl, clientId, new MemoryPersistence());
 
             MqttConnectOptions options = new MqttConnectOptions();
             options.setCleanSession(true);
@@ -74,7 +75,7 @@ public class MqttConfig {
             client.setCallback(new MqttCallbackExtended() {
                 @Override
                 public void connectComplete(boolean reconnect, String serverURI) {
-                    // cleanSession=true: subscription mất khi reconnect nên phải đăng ký lại mỗi lần kết nối
+                    // cleanSession=true: subscription máº¥t khi reconnect nÃªn pháº£i Ä‘Äƒng kÃ½ láº¡i má»—i láº§n káº¿t ná»‘i
                     for (String topic : subscriptions) {
                         if (topic != null && !topic.isBlank()) {
                             try {
