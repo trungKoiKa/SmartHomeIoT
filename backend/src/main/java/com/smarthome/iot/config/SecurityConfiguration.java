@@ -84,6 +84,7 @@ public class SecurityConfiguration {
                         .permitAll()
 
                         .requestMatchers(HttpMethod.POST, "/client/device/*/toggle").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/client/voice/**").hasAnyRole("USER", "ADMIN")
                         .requestMatchers("/", "/login", "/register", "/client/**", "/css/**", "/js/**", "/images/**").permitAll()
                         
 

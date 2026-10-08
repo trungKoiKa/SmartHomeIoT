@@ -11,6 +11,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import com.smarthome.iot.domain.Device;
@@ -18,9 +19,11 @@ import com.smarthome.iot.domain.Room;
 import com.smarthome.iot.domain.Sensor;
 import com.smarthome.iot.domain.SensorData;
 import com.smarthome.iot.service.DeviceService;
+import com.smarthome.iot.service.MqttUnavailableException;
 import com.smarthome.iot.service.RoomService;
 import com.smarthome.iot.service.SensorDataService;
 import com.smarthome.iot.service.SensorService;
+import com.smarthome.iot.service.VoiceCommandService;
 
 @Controller
 public class ClientController {
@@ -29,13 +32,16 @@ public class ClientController {
     private final SensorService sensorService;
     private final SensorDataService sensorDataService;
     private final DeviceService deviceService;
+    private final VoiceCommandService voiceCommandService;
 
     public ClientController(RoomService roomService, SensorService sensorService,
-            SensorDataService sensorDataService, DeviceService deviceService) {
+            SensorDataService sensorDataService, DeviceService deviceService,
+            VoiceCommandService voiceCommandService) {
         this.roomService = roomService;
         this.sensorService = sensorService;
         this.sensorDataService = sensorDataService;
         this.deviceService = deviceService;
+        this.voiceCommandService = voiceCommandService;
     }
 
     @GetMapping("/client/room-list")
@@ -138,6 +144,48 @@ public class ClientController {
             resp.put("id", device.getId());
             resp.put("status", device.getStatus());
             return ResponseEntity.ok(resp);
+        } catch (MqttUnavailableException e) {
+            resp.put("success", false);
+            resp.put("message", e.getMessage());
+            return ResponseEntity.status(503).body(resp);
+        } catch (Exception e) {
+            resp.put("success", false);
+            resp.put("message", e.getMessage());
+            return ResponseEntity.status(500).body(resp);
+        }
+    }
+
+    public record VoiceRequest(String text) {
+    }
+
+    @PostMapping("/client/voice/command")
+    @ResponseBody
+    @PreAuthorize("hasAnyRole('USER','ADMIN')")
+    public ResponseEntity<java.util.Map<String, Object>> voiceCommand(@RequestBody VoiceRequest request) {
+        java.util.Map<String, Object> resp = new java.util.HashMap<>();
+        String text = request != null ? request.text() : null;
+        if (text != null && text.length() > 200) {
+            resp.put("success", false);
+            resp.put("message", "Câu lệnh quá dài");
+            return ResponseEntity.badRequest().body(resp);
+        }
+
+        try {
+            VoiceCommandService.Result result = this.voiceCommandService.execute(text);
+            resp.put("success", result.success());
+            resp.put("message", result.message());
+            if (result.success()) {
+                resp.put("status", result.status());
+                resp.put("devices", result.devices().stream()
+                        .map(d -> java.util.Map.of("id", d.getId(), "status", d.getStatus()))
+                        .toList());
+            }
+            // Không hiểu lệnh là lỗi người dùng (200 + success=false), không phải lỗi server
+            return ResponseEntity.ok(resp);
+        } catch (MqttUnavailableException e) {
+            resp.put("success", false);
+            resp.put("message", e.getMessage());
+            return ResponseEntity.status(503).body(resp);
         } catch (Exception e) {
             resp.put("success", false);
             resp.put("message", e.getMessage());

@@ -38,10 +38,10 @@
 typedef struct {
     float    temperature;       /* °C                             */
     float    humidity;          /* %RH                            */
-    uint16_t gasValue;          /* ADC raw MQ-2                   */
-    uint16_t lightValue;        /* ADC raw LDR                    */
+    uint16_t gasValue;          /* MQ-2 quy doi 0-100 %           */
+    uint16_t lightValue;        /* LDR quy doi 0-100 %            */
     uint16_t tempThreshold;     /* Ngưỡng nhiệt độ (°C * 1)       */
-    uint16_t gasThreshold;      /* Ngưỡng gas ADC                 */
+    uint16_t gasThreshold;      /* Ngưỡng gas (0-100 %)           */
     uint8_t  relayStatus;       /* bit0=relay1, bit1=relay2       */
     uint8_t  alertStatus;       /* 0 = OK, 1 = CẢNH BÁO          */
     uint8_t  autoMode;          /* 1 = tự động, 0 = tay           */
@@ -55,5 +55,9 @@ typedef struct {
 } SensorFrame_t;
 
 #pragma pack(pop)
+
+/* Gateway ESP32 (sensor_data.h) khai báo struct này lần thứ hai: lệch kích thước là báo lỗi lúc build.
+ * (typedef mảng âm kích thước: chạy được trên mọi trình biên dịch C, kể cả armcc cũ không có _Static_assert) */
+typedef char SensorData_size_must_be_19_bytes[(sizeof(SensorData_t) == 19U) ? 1 : -1];
 
 #endif /* NODE_CONFIG_H */
