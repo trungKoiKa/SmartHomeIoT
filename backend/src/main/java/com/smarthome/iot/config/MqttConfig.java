@@ -1,4 +1,4 @@
-﻿package com.smarthome.iot.config;
+package com.smarthome.iot.config;
 
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashSet;
