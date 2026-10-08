@@ -3,7 +3,7 @@
 #include "sensor_data.h"
 #include "lora_receiver.h"
 #include "lcd_display.h"
-#include "blynk_bridge.h"
+#include "mqtt_bridge.h"
 
 static SensorData_t sensorData = { 0.0f, 0.0f, 0, 0, 35, 60, 0, 0, false };
 
@@ -57,7 +57,7 @@ void setup() {
   // initLcdDisplay();
   // updateLcdDisplay(sensorData);
 
-  initBlynkBridge();
+  initMqttBridge();
 }
 void printDeviceLog() {
   static unsigned long lastLogTime = 0;
@@ -69,13 +69,15 @@ void printDeviceLog() {
   }
 }
 void loop() {
-  blynkBridgeLoop();
+  mqttBridgeLoop();
   SensorData_t loraFrame;
   if (readLoraSensorData(loraFrame)) {
     SensorData_t oldSensorData = sensorData;
     bool changed = mergeChangedFields(sensorData, loraFrame);
     if (!changed) {
       Serial.println("LoRa frame khong doi du lieu, bo qua cap nhat");
+      // Van bao bridge de xac nhan trang thai relay sau lenh dieu khien.
+      mqttBridgePublishChangedFromLora(oldSensorData, sensorData);
       return;
     }
 
@@ -93,6 +95,6 @@ void loop() {
     Serial.printf("AutoMode    : %u\n", sensorData.autoMode);
     Serial.println("----------------------------");
     // updateLcdDisplay(sensorData);
-    blynkBridgePublishChangedFromLora(oldSensorData, sensorData);
+    mqttBridgePublishChangedFromLora(oldSensorData, sensorData);
   }
 }

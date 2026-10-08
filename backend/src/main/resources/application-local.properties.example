@@ -1,0 +1,7 @@
+# Copy thành application-local.properties rồi điền giá trị thật (hoặc dùng biến môi trường
+# DB_USERNAME, DB_PASSWORD, MQTT_BROKER_URL, MQTT_USERNAME, MQTT_PASSWORD)
+spring.datasource.username=root
+spring.datasource.password=
+mqtt.broker.url=tcp://localhost:1883
+mqtt.username=
+mqtt.password=

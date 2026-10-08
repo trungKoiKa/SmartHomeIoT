@@ -61,6 +61,7 @@ Dự án hiện tại tập trung vào nền tảng web:
 | 🌡️ **Quản lý cảm biến** | Theo dõi cảm biến theo phòng, xem dữ liệu mới nhất |
 | 💡 **Quản lý thiết bị** | CRUD thiết bị và gán phòng trong admin |
 | 🎛️ **Điều khiển thiết bị** | Bật/tắt thiết bị từ client (chỉ User/Admin) |
+| 🎙️ **Điều khiển giọng nói** | Nút micro ở trang thiết bị (Web Speech API, `vi-VN`): "bật đèn 1", "tắt quạt", "tắt tất cả"... |
 | 📊 **Admin Dashboard** | Thống kê tổng quan users/rooms/sensors/devices |
 | 📡 **MQTT API** | Kiểm tra trạng thái MQTT, publish test topic/command |
 
@@ -98,7 +99,12 @@ Dự án hiện tại tập trung vào nền tảng web:
 
 ## 📡 Danh sách MQTT Topics (Catalog)
 
-Dưới đây là danh sách các topic đang được sử dụng để giao tiếp giữa Server và ESP32 qua MQTT:
+Dưới đây là danh sách các topic đang được sử dụng để giao tiếp giữa Server và ESP32 qua MQTT.
+
+> **ID cố định:** gateway gắn cứng ID, nên bảng `sensors`/`devices` trong DB phải có đúng các ID này:
+> sensor `1`=ánh sáng, `2`=nhiệt độ, `3`=gas, `4`=độ ẩm; device `1`=relay 1, `2`=relay 2.
+> Lệnh điều khiển **không retained** (lệnh cũ không phát lại khi gateway kết nối lại); gateway tự đẩy lại trạng thái thật mỗi lần kết nối.
+> Gateway dùng PubSubClient nên subscribe `command` ở QoS 0.
 
 | Chức năng | Luồng dữ liệu | Topic Pattern | Payload mẫu | Ý nghĩa | QoS |
 |---|---|---|---|---|---|
@@ -145,21 +151,23 @@ git clone https://github.com/your-username/HomeSmartIoT.git
 cd HomeSmartIoT
 ```
 
-### 2. Cấu hình `application.properties`
+### 2. Cấu hình (không commit mật khẩu)
+
+`application.properties` chỉ chứa giá trị mặc định; thông tin nhạy cảm đặt trong
+`backend/src/main/resources/application-local.properties` (đã `.gitignore`, mẫu: `application-local.properties.example`)
+hoặc biến môi trường `DB_USERNAME`, `DB_PASSWORD`, `MQTT_BROKER_URL`, `MQTT_USERNAME`, `MQTT_PASSWORD`:
 
 ```properties
-spring.datasource.url=jdbc:mysql://localhost:3306/smarthome
+# application-local.properties
 spring.datasource.username=root
-spring.datasource.password=123456
-spring.jpa.hibernate.ddl-auto=update
-spring.jpa.show-sql=true
-
-mqtt.enabled=true
+spring.datasource.password=<mat-khau-db>
 mqtt.broker.url=tcp://localhost:1883
-mqtt.client.id=test
 mqtt.username=
 mqtt.password=
 ```
+
+Các thiết lập khác (`mqtt.enabled`, `mqtt.client.id`, topic...) nằm sẵn trong `application.properties`.
+`mqtt.client.id` của backend (`homesmart`) phải **khác** client id của gateway.
 
 > Lưu ý: nếu `mqtt.broker.url` để trống, app vẫn chạy nhưng MQTT sẽ không kết nối.
 
@@ -250,19 +258,25 @@ Project_Java_MyClass/
 │   ├── mvnw
 │   └── mvnw.cmd
 ├── embedded/
-│   └── stm32-node/                  # Firmware node cảm biến STM32
-│       ├── Core/
-│       │   ├── Inc/
-│       │   └── Src/
-│       ├── Drivers/
-│       │   ├── CMSIS/
-│       │   └── STM32F1xx_HAL_Driver/
-│       ├── myLib/
-│       │   ├── inc/
-│       │   └── src/
-│       ├── MDK-ARM/
-│       ├── HomeSmart.ioc
-│       └── README.md
+│   ├── stm32-node/                  # Firmware node cảm biến STM32
+│   │   ├── Core/
+│   │   │   ├── Inc/
+│   │   │   └── Src/
+│   │   ├── Drivers/
+│   │   │   ├── CMSIS/
+│   │   │   └── STM32F1xx_HAL_Driver/
+│   │   ├── myLib/
+│   │   │   ├── inc/
+│   │   │   └── src/
+│   │   ├── MDK-ARM/
+│   │   ├── HomeSmart.ioc
+│   │   └── README.md
+│   └── esp32-gateway/               # Firmware gateway ESP32 (LoRa -> MQTT)
+│       ├── Gateway_Esp32.ino
+│       ├── mqtt_bridge.{h,cpp}
+│       ├── lora_receiver.{h,cpp}
+│       ├── sensor_data.h
+│       └── secrets.example.h
 └── README.md
 ```
 
@@ -289,9 +303,23 @@ Project_Java_MyClass/
 
 ### Gateway (ESP32)
 
-- Nhận dữ liệu từ node qua LoRa
-- Chuyển tiếp lên MQTT broker
-- Nhận lệnh điều khiển từ topic command và truyền ngược về node
+Mã nguồn: `embedded/esp32-gateway` (Arduino, thư viện **PubSubClient**).
+
+- Nhận dữ liệu từ node qua LoRa, hỏi node bằng lệnh `senddata` mỗi 10s
+- Chuyển tiếp lên MQTT broker (xem bảng topic): chỉ publish giá trị thay đổi, đẩy toàn bộ khi kết nối lại
+- Nhận lệnh từ `smarthome/device/{id}/command`, đóng gói frame LoRa gửi xuống node rồi xác nhận lại trạng thái relay thật qua `.../status`
+- Lệnh relay khi node đang `AUTO` sẽ chuyển node sang `MANUAL`
+- Last Will `smarthome/gateway/availability` = `offline` khi gateway rớt mạng
+
+Cấu hình: copy `embedded/esp32-gateway/secrets.example.h` thành `secrets.h` (đã `.gitignore`) và điền WiFi + MQTT.
+
+> Struct `SensorData_t` được khai báo ở **hai nơi** (`stm32-node/myLib/inc/node_config.h` và `esp32-gateway/sensor_data.h`) và phải khớp từng byte (19 byte, packed). Cả hai có kiểm tra kích thước lúc biên dịch.
+
+### Điều khiển bằng giọng nói
+
+Đăng nhập → `/client/device` → bấm nút micro và nói lệnh. Trình duyệt nhận dạng (Chrome/Edge, cần HTTPS hoặc `localhost`),
+gửi văn bản tới `POST /client/voice/command`; backend phân tích tiếng Việt (bật/mở, tắt/đóng, tên thiết bị, số "một/hai", "tất cả") rồi publish lệnh MQTT.
+Tên thiết bị trong admin nên ngắn, dễ đọc (ví dụ "Đèn 1", "Quạt").
 
 ---
 

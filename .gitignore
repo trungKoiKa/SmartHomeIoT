@@ -1,0 +1,22 @@
+# Secrets (copy *.example.h / application-local.properties.example to create)
+embedded/esp32-gateway/secrets.h
+backend/src/main/resources/application-local.properties
+
+# Keil MDK-ARM build output (keep HomeSmart.hex, .sct, .uvprojx, .uvoptx)
+embedded/stm32-node/MDK-ARM/HomeSmart/*.o
+embedded/stm32-node/MDK-ARM/HomeSmart/*.d
+embedded/stm32-node/MDK-ARM/HomeSmart/*.crf
+embedded/stm32-node/MDK-ARM/HomeSmart/*.axf
+embedded/stm32-node/MDK-ARM/HomeSmart/*.htm
+embedded/stm32-node/MDK-ARM/HomeSmart/*.map
+embedded/stm32-node/MDK-ARM/HomeSmart/*.lnp
+embedded/stm32-node/MDK-ARM/HomeSmart/*.lst
+embedded/stm32-node/MDK-ARM/HomeSmart/*.dep
+embedded/stm32-node/MDK-ARM/HomeSmart/*.iex
+embedded/stm32-node/MDK-ARM/*.uvguix.*
+
+# Misc
+embedded/esp32-gateway.zip
+backend/homesmart-tcpbroker1loapayvn/
+backend/src/main/webapp/resources/images/avatar/*
+!backend/src/main/webapp/resources/images/avatar/.gitkeep

@@ -9,6 +9,15 @@
     <div class="text-center mx-auto mb-5" style="max-width: 760px;">
         <h1 class="display-5 fw-bold">Điều khiển thiết bị</h1>
         <p class="text-muted mb-0">Quản lý trạng thái bật/tắt thiết bị theo từng phòng.</p>
+
+        <c:if test="${isLoggedIn}">
+            <div class="mt-4">
+                <button type="button" id="voice-btn" class="btn btn-outline-primary rounded-pill px-4 py-2 shadow-sm">
+                    <span id="voice-icon">&#127908;</span> <span id="voice-label">Điều khiển bằng giọng nói</span>
+                </button>
+                <div id="voice-hint" class="small text-muted mt-2">Ví dụ: "bật đèn 1", "tắt quạt", "tắt tất cả".</div>
+            </div>
+        </c:if>
     </div>
 
     <c:if test="${empty devices}">
@@ -147,6 +156,97 @@
         });
     }
 </script>
+
+<c:if test="${isLoggedIn}">
+<script>
+    (function () {
+        const btn = document.getElementById('voice-btn');
+        const hint = document.getElementById('voice-hint');
+        const label = document.getElementById('voice-label');
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+        // Web Speech API chỉ chạy trên Chrome/Edge và trong secure context (HTTPS hoặc localhost)
+        if (!SR || !window.isSecureContext) {
+            btn.disabled = true;
+            hint.textContent = 'Giọng nói cần Chrome/Edge và kết nối HTTPS (hoặc localhost).';
+            return;
+        }
+
+        const recognition = new SR();
+        recognition.lang = 'vi-VN';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        let listening = false;
+        const setListening = (on) => {
+            listening = on;
+            btn.classList.toggle('btn-danger', on);
+            btn.classList.toggle('btn-outline-primary', !on);
+            label.textContent = on ? 'Đang nghe... (bấm để dừng)' : 'Điều khiển bằng giọng nói';
+        };
+
+        const showToast = (message, ok) => {
+            const toastEl = document.getElementById('toggleToast');
+            document.getElementById('toast-msg').textContent = message;
+            toastEl.className = 'toast align-items-center text-white border-0 shadow-lg ' + (ok ? 'bg-success' : 'bg-danger');
+            new bootstrap.Toast(toastEl, { delay: 3500 }).show();
+        };
+
+        const applyState = (id, status) => {
+            const toggle = document.getElementById('toggle-' + id);
+            const badge = document.getElementById('status-' + id);
+            const on = status === 'ON';
+            if (toggle) toggle.className = 'toggle-switch ' + (on ? 'on' : 'off');
+            if (badge) {
+                badge.className = 'badge ' + (on ? 'bg-success' : 'bg-secondary') + ' rounded-pill px-3 py-2';
+                badge.textContent = status;
+            }
+        };
+
+        const sendCommand = (text) => {
+            hint.textContent = 'Bạn nói: "' + text + '"';
+            fetch('/client/voice/command', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    '${_csrf.headerName}': '${_csrf.token}'
+                },
+                body: JSON.stringify({ text: text })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    (data.devices || []).forEach(d => applyState(d.id, d.status));
+                }
+                showToast(data.message || 'Không có phản hồi', !!data.success);
+            })
+            .catch(err => showToast('Lỗi: ' + err, false));
+        };
+
+        recognition.onresult = (e) => sendCommand(e.results[0][0].transcript);
+        recognition.onerror = (e) => {
+            const msg = e.error === 'not-allowed' ? 'Chưa cấp quyền microphone'
+                      : e.error === 'no-speech' ? 'Không nghe thấy giọng nói'
+                      : 'Lỗi nhận dạng: ' + e.error;
+            showToast(msg, false);
+        };
+        recognition.onend = () => setListening(false);
+
+        btn.addEventListener('click', () => {
+            if (listening) {
+                recognition.stop();
+                return;
+            }
+            try {
+                recognition.start();
+                setListening(true);
+            } catch (err) {
+                setListening(false);
+            }
+        });
+    })();
+</script>
+</c:if>
 
 <style>
     .device-card {
