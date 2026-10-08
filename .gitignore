@@ -20,3 +20,7 @@ embedded/esp32-gateway.zip
 backend/homesmart-tcpbroker1loapayvn/
 backend/src/main/webapp/resources/images/avatar/*
 !backend/src/main/webapp/resources/images/avatar/.gitkeep
+
+# Broker dev: file mat khau da bam
+infra/mosquitto/passwd
+
