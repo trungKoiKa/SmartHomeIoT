@@ -112,6 +112,17 @@ Dưới đây là danh sách các topic đang được sử dụng để giao ti
 | **Gateway Availability** | ESP32 &rarr; Broker | `smarthome/gateway/availability` | `online` / `offline` | Last Will: broker tự báo `offline` khi gateway rớt mạng. Backend chưa subscribe. |
 | **Gateway State** | ESP32 &rarr; Broker | `smarthome/gateway/state` | JSON | Chế độ AUTO/MANUAL, ngưỡng... phục vụ debug. Backend chưa subscribe. |
 
+### Giao diện web (client)
+
+Giao diện sáng, kiểu Apple Home: Bootstrap 5.3 + `resources/client/css/smarthome.css` (token màu/khoảng cách), font Plus Jakarta Sans, bootstrap-icons.
+Layout dùng chung ở `WEB-INF/view/client/layout/` (`header.jsp`, `footer.jsp`, thẻ `device-card.jsp`, `sensor-card.jsp`).
+
+- Số liệu tự cập nhật mỗi 5 giây (`resources/client/js/live.js`): tải lại HTML của trang và thay các vùng `data-live-region`, không cần endpoint JSON; có nút Tạm dừng và tự dừng khi tab ẩn.
+- Trang chi tiết cảm biến có biểu đồ Chart.js (`sensor-chart.js`) từ 10 lần đo gần nhất.
+- Công tắc thiết bị và giọng nói nằm trong `device-control.js`.
+- Trên điện thoại có thanh tab dưới cùng; mọi trang hỗ trợ bàn phím, `prefers-reduced-motion` và không chỉ dùng màu để báo trạng thái.
+- Trang quản trị (`/admin`) vẫn dùng template SB Admin cũ.
+
 ## 📦 Công nghệ sử dụng
 
 | Công nghệ | Vai trò |
@@ -123,7 +134,8 @@ Dưới đây là danh sách các topic đang được sử dụng để giao ti
 | **Spring Session JDBC** | Quản lý session trong DB |
 | **Spring Data JPA / Hibernate** | ORM dữ liệu |
 | **MySQL 8** | Cơ sở dữ liệu |
-| **JSP / JSTL / Bootstrap** | Giao diện web |
+| **JSP / JSTL / Bootstrap 5** | Giao diện web (client: smarthome.css; admin: SB Admin) |
+| **Chart.js** | Biểu đồ lịch sử cảm biến |
 | **Eclipse Paho MQTT** | MQTT client của backend (publish/subscribe) |
 | **Mosquitto** | MQTT broker (cấu hình dev trong `infra/mosquitto`) |
 | **PubSubClient (Arduino)** | MQTT client của gateway ESP32 |

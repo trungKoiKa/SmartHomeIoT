@@ -1,71 +1,12 @@
-﻿<%@page contentType="text/html" pageEncoding="UTF-8" isELIgnored="false" %>
-<%@ taglib prefix="c" uri="jakarta.tags.core" %>
-<%@ taglib uri="http://www.springframework.org/tags/form" prefix="form" %>
+<%@page contentType="text/html" pageEncoding="UTF-8" isELIgnored="false" trimDirectiveWhitespaces="true" %>
+</main>
 
-<div class="container-fluid bg-dark text-white-50 footer pt-5 mt-5">
-    <div class="container py-5">
-        <div class="pb-4 mb-4" style="border-bottom: 1px solid rgba(226, 175, 24, 0.5);">
-            <div class="row g-4">
-                <div class="col-lg-3">
-                    <a href="#">
-                        <h1 class="text-primary mb-0">SmartHome</h1>
-                        <p class="text-secondary mb-0">Giải pháp IoT</p>
-                    </a>
-                </div>
-            </div>
-        </div>
+<div class="sh-wrap"><p class="sh-footer">SmartHome IoT &middot; Nhóm 11 &middot; D22_OOP_TEL_PTIT</p></div>
 
-        <div class="row g-5">
-            <div class="col-lg-3 col-md-6">
-                <div class="footer-item">
-                    <h4 class="text-light mb-3">Quản lý thông minh</h4>
-                </div>
-            </div>
-            <div class="col-lg-3 col-md-6">
-                <div class="d-flex flex-column text-start footer-item">
-                    <h4 class="text-light mb-3">Thông tin website</h4>
-                    <a class="btn-link" href="/">Về chúng tôi</a>
-                </div>
-            </div>
-            <div class="col-lg-3 col-md-6">
-                <div class="d-flex flex-column text-start footer-item">
-                    <h4 class="text-light mb-3">Tài khoản</h4>
-                    <a class="btn-link" href="/">Tài khoản của tôi</a>
-                </div>
-            </div>
-            <div class="col-lg-3 col-md-6">
-                <div class="footer-item">
-                    <h4 class="text-light mb-3">Liên hệ</h4>
-                    <p>Địa chỉ: Km10, Nguyễn Trãi, Hà Đông, Hà Nội</p>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+<div class="sh-toast-wrap" id="sh-toasts" role="status" aria-live="polite" aria-atomic="false"></div>
 
-<div class="container-fluid copyright bg-dark py-4">
-    <div class="container">
-        <div class="row">
-            <div class="col-md-6 text-center text-md-start mb-3 mb-md-0">
-                <span class="text-light"><a href="#"><i class="fas fa-copyright text-light me-2"></i>
-                        Nhóm 10</a>, All rights reserved.</span>
-            </div>
-            <div class="col-md-6 my-auto text-center text-md-end text-white">
-                Designed By <a class="border-bottom" href="https://htmlcodex.com">HTML Codex</a> Distributed By <a
-                    class="border-bottom" href="https://themewagon.com">ThemeWagon</a>
-            </div>
-        </div>
-    </div>
-</div>
-
-<a href="#" class="btn btn-primary border-3 border-primary rounded-circle back-to-top"><i class="fa fa-arrow-up"></i></a>
-
-<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/client/lib/easing/easing.min.js"></script>
-<script src="/client/lib/waypoints/waypoints.min.js"></script>
-<script src="/client/lib/lightbox/js/lightbox.min.js"></script>
-<script src="/client/lib/owlcarousel/owl.carousel.min.js"></script>
-<script src="/client/js/main.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script defer src="/client/js/device-control.js"></script>
+<script defer src="/client/js/live.js"></script>
 </body>
 </html>
