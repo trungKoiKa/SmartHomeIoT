@@ -75,7 +75,7 @@ public class MqttConfig {
             client.setCallback(new MqttCallbackExtended() {
                 @Override
                 public void connectComplete(boolean reconnect, String serverURI) {
-                    // cleanSession=true: subscription máº¥t khi reconnect nÃªn pháº£i Ä‘Äƒng kÃ½ láº¡i má»—i láº§n káº¿t ná»‘i
+                    // cleanSession=true: subscription mất khi reconnect nên phải đăng ký lại mỗi lần kết nối
                     for (String topic : subscriptions) {
                         if (topic != null && !topic.isBlank()) {
                             try {

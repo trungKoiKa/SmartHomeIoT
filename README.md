@@ -63,37 +63,34 @@ Dự án hiện tại tập trung vào nền tảng web:
 | 🎛️ **Điều khiển thiết bị** | Bật/tắt thiết bị từ client (chỉ User/Admin) |
 | 🎙️ **Điều khiển giọng nói** | Nút micro ở trang thiết bị (Web Speech API, `vi-VN`): "bật đèn 1", "tắt quạt", "tắt tất cả"... |
 | 📊 **Admin Dashboard** | Thống kê tổng quan users/rooms/sensors/devices |
-| 📡 **MQTT API** | Kiểm tra trạng thái MQTT, publish test topic/command |
+| 🚨 **Cảnh báo** | Gateway báo `alert` (gas vượt ngưỡng) được lưu thành bản ghi `sensor_data` có cờ `alert` |
+| 📡 **MQTT** | Backend subscribe dữ liệu/trạng thái từ gateway và publish lệnh điều khiển (xem bảng topic) |
 
 ---
 
 ## 📡 Kiến trúc hệ thống
 
 ```text
-[Cảm biến / Node IoT (STM32)]
-        │
-        ├── LoRa
-        ▼
-[ESP32 Gateway]
-        │ (MQTT)
-        ▼
-[Spring Boot Server]
-        │
-        ├── JPA/Hibernate
-        ▼
-[MySQL Database]
-        │
-        ▼
-[Web UI: Admin + Client]
+[Node IoT STM32: DHT11, MQ2, LDR, 2 relay]
+        ▲ │  LoRa (UART, frame nhị phân 22 byte ↑ / lệnh điều khiển ↓)
+        │ ▼
+[ESP32 Gateway]  ◄── WiFi ──►  [MQTT Broker (Mosquitto)]
+                                        ▲ │
+                                        │ ▼  subscribe dữ liệu / publish lệnh
+                               [Spring Boot Server] ◄── JPA ──► [MySQL]
+                                        ▲ │
+                                        │ ▼  HTTP (JSP + fetch JSON)
+                          [Web UI: Admin + Client (nút micro giọng nói)]
 ```
 
 ### Luồng hoạt động
 
-1. Node IoT thu thập dữ liệu cảm biến và gửi về gateway.
-2. Gateway publish dữ liệu lên broker MQTT.
-3. Backend subscribe topic MQTT, parse payload và lưu DB.
+1. Gateway gửi `senddata` xuống node mỗi 10s; node trả frame LoRa chứa nhiệt độ, độ ẩm, gas, ánh sáng, trạng thái relay, cảnh báo.
+2. Gateway publish lên broker MQTT (chỉ khi giá trị thay đổi; đẩy đủ khi vừa kết nối).
+3. Backend (`MqttConfig` → `MqttMessageHandler`) parse topic/payload và lưu `sensor_data` / cập nhật trạng thái thiết bị.
 4. Website hiển thị dữ liệu phòng/cảm biến/thiết bị.
-5. Khi người dùng điều khiển thiết bị, backend cập nhật trạng thái và publish lệnh MQTT ngược lại thiết bị.
+5. Người dùng bật/tắt thiết bị bằng nút hoặc giọng nói (`VoiceCommandService`) → `DeviceService` publish `smarthome/device/{id}/command` → gateway gửi frame điều khiển xuống node → gateway publish lại trạng thái relay thật qua `.../status` để DB khớp với phần cứng.
+6. Nếu MQTT không kết nối, backend trả 503 và **không** ghi trạng thái giả vào DB.
 
 ---
 
@@ -104,14 +101,16 @@ Dưới đây là danh sách các topic đang được sử dụng để giao ti
 > **ID cố định:** gateway gắn cứng ID, nên bảng `sensors`/`devices` trong DB phải có đúng các ID này:
 > sensor `1`=ánh sáng, `2`=nhiệt độ, `3`=gas, `4`=độ ẩm; device `1`=relay 1, `2`=relay 2.
 > Lệnh điều khiển **không retained** (lệnh cũ không phát lại khi gateway kết nối lại); gateway tự đẩy lại trạng thái thật mỗi lần kết nối.
-> Gateway dùng PubSubClient nên subscribe `command` ở QoS 0.
+> Gateway dùng PubSubClient nên publish và subscribe ở QoS 0; backend publish lệnh QoS 1 và subscribe QoS 1.
 
-| Chức năng | Luồng dữ liệu | Topic Pattern | Payload mẫu | Ý nghĩa | QoS |
-|---|---|---|---|---|---|
-| **Device Command** | Server &rarr; ESP32 | `smarthome/device/{id}/command` | `"ON"` hoặc `"OFF"` | Lệnh điều khiển rơ-le/thiết bị từ Server gửi xuống ESP32. | 1 |
-| **Device Status** | ESP32 &rarr; Server | `smarthome/device/+/status` | `"ON"` hoặc `"OFF"` | Trạng thái thực tế trả về sau khi ESP32 xử lý lệnh phần cứng thành công. | 1 |
-| **Sensor Data** | ESP32 &rarr; Server | `smarthome/sensor/+/data` | `{"value":28.5}` hoặc `"28.5"` | Dữ liệu đo định kì của cảm biến. | 1 |
-| **Sensor Alert** | ESP32 &rarr; Server | `smarthome/sensor/+/alert` | `1` (Nguy hiểm) hoặc `0` (An toàn) | Tín hiệu cảnh báo khi giá trị đọc vượt ngưỡng an toàn quy định. | 1 |
+| Chức năng | Luồng dữ liệu | Topic Pattern | Payload mẫu | Ý nghĩa |
+|---|---|---|---|---|
+| **Device Command** | Server &rarr; ESP32 | `smarthome/device/{id}/command` | `ON` / `OFF` | Lệnh điều khiển relay từ Server (nút web hoặc giọng nói). |
+| **Device Status** | ESP32 &rarr; Server | `smarthome/device/{id}/status` | `ON` / `OFF` | Trạng thái relay thực tế đọc từ node sau mỗi frame LoRa. |
+| **Sensor Data** | ESP32 &rarr; Server | `smarthome/sensor/{id}/data` | `{"value":28.5}` hoặc `28.5` | Dữ liệu đo của cảm biến (gateway gửi dạng JSON). |
+| **Sensor Alert** | ESP32 &rarr; Server | `smarthome/sensor/3/alert` | `1` (nguy hiểm) / `0` (an toàn) | Cảnh báo gas vượt ngưỡng. |
+| **Gateway Availability** | ESP32 &rarr; Broker | `smarthome/gateway/availability` | `online` / `offline` | Last Will: broker tự báo `offline` khi gateway rớt mạng. Backend chưa subscribe. |
+| **Gateway State** | ESP32 &rarr; Broker | `smarthome/gateway/state` | JSON | Chế độ AUTO/MANUAL, ngưỡng... phục vụ debug. Backend chưa subscribe. |
 
 ## 📦 Công nghệ sử dụng
 
@@ -125,7 +124,11 @@ Dưới đây là danh sách các topic đang được sử dụng để giao ti
 | **Spring Data JPA / Hibernate** | ORM dữ liệu |
 | **MySQL 8** | Cơ sở dữ liệu |
 | **JSP / JSTL / Bootstrap** | Giao diện web |
-| **Eclipse Paho MQTT** | MQTT client (publish/subscribe) |
+| **Eclipse Paho MQTT** | MQTT client của backend (publish/subscribe) |
+| **Mosquitto** | MQTT broker (cấu hình dev trong `infra/mosquitto`) |
+| **PubSubClient (Arduino)** | MQTT client của gateway ESP32 |
+| **Web Speech API** | Nhận dạng giọng nói trên trình duyệt (`vi-VN`) |
+| **JUnit 5 / Mockito / H2** | Kiểm thử backend |
 | **Git & GitHub** | Quản lý mã nguồn |
 
 ---
@@ -139,6 +142,8 @@ Dưới đây là danh sách các topic đang được sử dụng để giao ti
 | MySQL | **8.0+** |
 | IDE | VS Code / IntelliJ IDEA / STS |
 | MQTT Broker | Mosquitto / EMQX / HiveMQ |
+| Gateway | Arduino IDE + ESP32 core + thư viện PubSubClient |
+| Node | Keil MDK-ARM (STM32F103) |
 
 ---
 
@@ -171,7 +176,19 @@ Các thiết lập khác (`mqtt.enabled`, `mqtt.client.id`, topic...) nằm sẵ
 
 > Lưu ý: nếu `mqtt.broker.url` để trống, app vẫn chạy nhưng MQTT sẽ không kết nối.
 
-### 3. Chạy project
+### 3. Broker MQTT dev (tuỳ chọn)
+
+Cài Mosquitto, rồi từ thư mục gốc repo (PowerShell):
+
+```powershell
+infra\mosquitto\setup-users.ps1     # tạo infra/mosquitto/passwd (đã gitignore), in mật khẩu ngẫu nhiên 1 lần cho user backend/gateway - chép vào application-local.properties và secrets.h
+infra\mosquitto\start-broker.ps1    # chạy broker ở cổng 1884, bắt buộc user/mật khẩu
+```
+
+Đặt `mqtt.broker.url=tcp://localhost:1884` và user/mật khẩu tương ứng vào `application-local.properties`.
+Nếu gateway ở máy khác, mở cổng 1884 trên firewall và đặt `MQTT_HOST` trong `secrets.h` là IP máy chạy broker.
+
+### 4. Chạy project
 
 Nếu đã cài Maven:
 
@@ -179,13 +196,26 @@ Nếu đã cài Maven:
 mvn spring-boot:run
 ```
 
-Nếu dùng Maven Wrapper:
+Nếu dùng Maven Wrapper (trong thư mục `backend`):
 
 ```bash
 mvnw.cmd spring-boot:run
 ```
 
-### 4. Truy cập ứng dụng
+Chạy test:
+
+```bash
+mvnw.cmd test
+```
+
+Test mặc định dùng H2 và tắt MQTT. Test end-to-end với broker và MySQL thật (cần broker đang chạy, DB `smarthome_e2e`
+và các biến môi trường `E2E_DB_PASSWORD`, `E2E_MQTT_BACKEND_PASS`, `E2E_MQTT_GATEWAY_USER`, `E2E_MQTT_GATEWAY_PASS`):
+
+```bash
+mvnw.cmd test -Dtest=GatewayMqttEndToEndTest -De2e=true
+```
+
+### 5. Truy cập ứng dụng
 
 ```text
 http://localhost:8080
@@ -214,8 +244,11 @@ CREATE DATABASE smarthome CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 - `sensors`
 - `sensor_data`
 - `devices`
-- `alerts`
 - `spring_session`, `spring_session_attributes`
+
+Cảnh báo không có bảng riêng: là cột `alert` của `sensor_data`.
+Bảng tự tạo nhờ `ddl-auto=update`, nhưng **ID phải khớp gateway**: cần có sensor ID 1–4 và device ID 1–2
+(tạo trong trang admin theo đúng thứ tự). Role `USER`, `ADMIN` cần có sẵn khi đăng ký/đăng nhập.
 
 ---
 
@@ -225,29 +258,29 @@ roles 1 --- n users
 rooms 1 --- n sensors
 rooms 1 --- n devices
 sensors 1 --- n sensor_data
-sensors 1 --- n alerts
 
 ---
 
 ## 📁 Cấu trúc dự án
 
 ```text
-Project_Java_MyClass/
+HomeSmartIoT/
 ├── backend/                         # Spring Boot + JSP + MQTT
 │   ├── src/
 │   │   ├── main/
 │   │   │   ├── java/com/smarthome/iot/
-│   │   │   │   ├── config/
+│   │   │   │   ├── config/          # Security, MqttConfig, WebMvc
 │   │   │   │   ├── controller/
 │   │   │   │   │   ├── admin/
 │   │   │   │   │   └── client/
 │   │   │   │   ├── domain/
 │   │   │   │   │   └── dto/
 │   │   │   │   ├── repository/
-│   │   │   │   └── service/
+│   │   │   │   └── service/         # DeviceService, MqttService, MqttMessageHandler, VoiceCommandService...
 │   │   │   │       └── validator/
 │   │   │   ├── resources/
-│   │   │   │   └── application.properties
+│   │   │   │   ├── application.properties
+│   │   │   │   └── application-local.properties.example
 │   │   │   └── webapp/
 │   │   │       ├── WEB-INF/view/
 │   │   │       │   ├── admin/
@@ -275,8 +308,11 @@ Project_Java_MyClass/
 │       ├── Gateway_Esp32.ino
 │       ├── mqtt_bridge.{h,cpp}
 │       ├── lora_receiver.{h,cpp}
+│       ├── lcd_display.{h,cpp}
 │       ├── sensor_data.h
 │       └── secrets.example.h
+├── infra/
+│   └── mosquitto/                   # Broker dev: mosquitto.conf, setup-users.ps1, start-broker.ps1
 └── README.md
 ```
 
@@ -328,8 +364,9 @@ Tên thiết bị trong admin nên ngắn, dễ đọc (ví dụ "Đèn 1", "Qu�
 - Thêm biểu đồ realtime cho sensor data
 - Bổ sung notify qua Email/Telegram khi vượt ngưỡng
 - Tách profile cấu hình `dev/staging/prod`
-- Seed dữ liệu role mặc định (`USER`, `ADMIN`) tự động
-- Viết test integration cho MQTT + Security
+- Seed dữ liệu role mặc định (`USER`, `ADMIN`) và sensor/device ID cố định tự động
+- Backend subscribe `smarthome/gateway/availability` để hiển thị gateway online/offline
+- Dùng TLS cho MQTT khi triển khai ngoài mạng nội bộ
 
 ---
 
@@ -338,8 +375,8 @@ Tên thiết bị trong admin nên ngắn, dễ đọc (ví dụ "Đèn 1", "Qu�
 ### Quy trình làm việc với Git
 
 ```bash
-git checkout main
-git pull origin main
+git checkout master
+git pull origin master
 git checkout -b feature/ten-tinh-nang
 ```
 
@@ -351,9 +388,9 @@ git commit -m "feat: thêm chức năng quản lý phòng"
 git push origin feature/ten-tinh-nang
 ```
 
-Sau đó tạo **Pull Request** lên nhánh `main`.
+Sau đó tạo **Pull Request** lên nhánh `master`.
 
-> Không nên push trực tiếp vào `main` khi làm việc nhóm.
+> Không nên push trực tiếp vào `master` khi làm việc nhóm.
 
 ---
 
@@ -464,14 +501,17 @@ Kiểm tra lại:
 Kiểm tra:
 
 - `mqtt.enabled=true`
-- `mqtt.broker.url` đã điền chưa (ví dụ `tcp://localhost:1883`)
-- Broker MQTT có đang chạy không
+- `mqtt.broker.url` đã điền chưa (ví dụ `tcp://localhost:1883`, broker dev của repo dùng cổng `1884`)
+- Broker MQTT có đang chạy không, user/mật khẩu có đúng không
 - Firewall/network có chặn cổng broker không
 
-Test nhanh:
+Xem log backend: có dòng `Connected to broker` và `Subscribe -> smarthome/...` là đã kết nối.
+Nếu MQTT mất kết nối, bật/tắt thiết bị sẽ trả lỗi 503.
 
-```text
-GET /api/v1/mqtt/status
+Test nhanh bằng Mosquitto:
+
+```bash
+mosquitto_sub -h localhost -p 1884 -u <user> -P <pass> -t "smarthome/#" -v
 ```
 
 </details>
